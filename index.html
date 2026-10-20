@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  
+  <!-- Meta Tag per Installazione PWA/App Mobile & PC -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Beach Tennis Erba">
+  <meta name="theme-color" content="#059669">
+
+  <title>Segnapunti Beach Tennis sull'Erba</title>
+
+  <!-- Icone App -->
+  <link rel="apple-touch-icon" sizes="180x180" href="logo.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="logo.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="logo.png">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- Link al Manifest PWA -->
+  <link rel="manifest" href="manifest.json">
+  
+  <!-- Script per il Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js');
+      });
+    }
+  </script>
+
+  <style>
+    body {
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    .score-digit {
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum";
+      line-height: 0.8;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.15);
+      border-radius: 9999px;
+    }
+
+    /* OTTIMIZZAZIONE LANDSCAPE */
+    @media (orientation: landscape) and (max-height: 550px) {
+      .landscape-compact-header {
+        padding-top: 0.25rem !important;
+        padding-bottom: 0.25rem !important;
+      }
+      .landscape-compact-logo {
+        height: 3rem !important;
+        margin-bottom: 0.25rem !important;
+      }
+      .landscape-score-digit {
+        font-size: 32vh !important;
+      }
+      .landscape-card-padding {
+        padding: 0.5rem !important;
+      }
+      .landscape-hide-subtext {
+        display: none !important;
+      }
+      .landscape-table-container {
+        max-height: 5.5rem !important;
+        padding-top: 0.25rem !important;
+        padding-bottom: 0.25rem !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-white text-slate-900 min-h-screen flex flex-col justify-between">
+
+  <!-- ==================== BANNER FLOTTANTE DI INSTALLAZIONE APP (IN ALTO) ==================== -->
+  <div id="pwa-install-banner" class="fixed top-4 left-4 right-4 max-w-lg mx-auto bg-slate-900 text-white p-3.5 sm:p-4 rounded-2xl shadow-2xl border border-slate-700 flex items-center justify-between z-50 transition-all duration-300">
+    <div class="flex items-center gap-3">
+      <img src="logo.png" class="w-10 h-10 rounded-xl object-cover border border-slate-700 shrink-0">
+      <div>
+        <div class="text-xs sm:text-sm font-black text-emerald-400">Installa l'App</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-1.5 shrink-0">
+      <button onclick="triggerInstallPWA()" class="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-black text-xs px-3.5 py-2 rounded-xl transition shadow">
+        INSTALLA
+      </button>
+      <button onclick="closeInstallBanner()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== SCHERMATA CONFIGURAZIONE (SCHERMATA 1) ==================== -->
+  <div id="setup-view" class="max-w-2xl mx-auto w-full p-4 flex-1 flex flex-col justify-between">
+    <div>
+      <!-- Header con LOGO -->
+      <div class="text-center my-3 landscape-compact-header">
+        <img id="tournament-logo" src="logo.png" alt="Logo Torneo" class="h-24 sm:h-28 max-w-[200px] w-auto mx-auto mb-2 object-contain landscape-compact-logo">
+        <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-emerald-700">Beach Tennis sull'Erba</h1>
+        <p class="text-xs text-slate-500 mt-0.5 landscape-hide-subtext">Configura la partita 2 vs 2 o consulta l'archivio</p>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200 mb-4">
+        <button id="tab-btn-setup" onclick="switchSetupTab('setup')" class="py-2 px-3 rounded-lg font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 bg-emerald-700 text-white shadow">
+          <i data-lucide="play-circle" class="w-4 h-4"></i> Nuova Partita
+        </button>
+        <button id="tab-btn-archive" onclick="switchSetupTab('archive')" class="py-2 px-3 rounded-lg font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 text-slate-600 hover:text-slate-900">
+          <i data-lucide="archive" class="w-4 h-4"></i> Archivio <span id="archive-count-badge" class="bg-slate-200 text-slate-800 text-xs px-2 py-0.5 rounded-full border border-slate-300">0</span>
+        </button>
+      </div>
+
+      <!-- TAB 1: FORM CONFIGURAZIONE -->
+      <div id="tab-content-setup" class="space-y-3">
+        <!-- Nomi Squadre (2 vs 2) -->
+        <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 sm:p-4 space-y-2">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <i data-lucide="users" class="w-4 h-4 text-emerald-700"></i> Squadre (Coppie 2 vs 2)
+          </h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Squadra 1 (Verde)</label>
+              <input type="text" id="t1-name" value="Squadra A" class="w-full bg-white border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-3 py-1.5 text-sm text-slate-900 font-semibold outline-none transition">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Squadra 2 (Blu)</label>
+              <input type="text" id="t2-name" value="Squadra B" class="w-full bg-white border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-3 py-1.5 text-sm text-slate-900 font-semibold outline-none transition">
+            </div>
+          </div>
+        </div>
+
+        <!-- Regole di Gioco -->
+        <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 sm:p-4 space-y-2">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <i data-lucide="settings" class="w-4 h-4 text-emerald-700"></i> Formato Partita
+          </h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Formato Incontro</label>
+              <select id="sets-to-win" class="w-full bg-white border border-slate-300 focus:border-slate-800 rounded-xl px-3 py-1.5 text-slate-900 font-semibold outline-none transition text-xs sm:text-sm">
+                <option value="2" selected>Al meglio dei 3 set (vince chi fa 2)</option>
+                <option value="3">Al meglio dei 5 set (vince chi fa 3)</option>
+                <option value="1">Set singolo (vince chi fa 1)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Inizia a servire</label>
+              <select id="first-server" class="w-full bg-white border border-slate-300 focus:border-slate-800 rounded-xl px-3 py-1.5 text-slate-900 font-semibold outline-none transition text-xs sm:text-sm">
+                <option value="1">Squadra 1</option>
+                <option value="2">Squadra 2</option>
+                <option value="random">Sorteggio Casuale</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Vantaggi (Deuce / AD) -->
+          <div class="flex items-center justify-between pt-2 border-t border-slate-200">
+            <div>
+              <div class="text-xs font-bold text-slate-800">Vantaggi (AD) sul 40-40</div>
+              <div class="text-[10px] sm:text-[11px] text-slate-500">Se attivo: 40-40 ➔ AD ➔ Game. Se disattivo: Killer Point sul 40-40</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="deuce-enabled" checked class="sr-only peer">
+              <div class="w-10 h-5 sm:w-11 sm:h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 sm:after:h-5 sm:after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
+          </div>
+
+          <!-- Tiebreak sul 6-6 -->
+          <div class="flex items-center justify-between pt-2 border-t border-slate-200">
+            <div>
+              <div class="text-xs font-bold text-slate-800">Tiebreak sul 6-6 nei Game</div>
+              <div class="text-[10px] sm:text-[11px] text-slate-500">Punti numerici (1, 2, 3...) fino a 7 punti con 2 di scarto</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="tiebreak-enabled" checked class="sr-only peer">
+              <div class="w-10 h-5 sm:w-11 sm:h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 sm:after:h-5 sm:after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: ARCHIVIO PARTITE -->
+      <div id="tab-content-archive" class="hidden space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Partite Salvate</h2>
+          <div class="flex gap-2">
+            <button onclick="exportArchiveCSV()" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition flex items-center gap-1.5">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i> Esporta CSV
+            </button>
+            <button onclick="clearArchive()" class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold rounded-lg border border-rose-200 transition flex items-center gap-1.5">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Svuota
+            </button>
+          </div>
+        </div>
+
+        <div id="archive-list" class="space-y-2.5">
+          <!-- Inserito dinamicamente da JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Pulsante Inizia Partita -->
+    <div id="start-btn-container" class="mt-3 pt-2 border-t border-slate-200">
+      <button onclick="startMatch()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-black text-base sm:text-lg py-3 rounded-2xl shadow-lg active:scale-[0.99] transition flex items-center justify-center gap-2">
+        <i data-lucide="play" class="w-5 h-5 sm:w-6 sm:h-6 fill-current"></i> INIZIA PARTITA
+      </button>
+    </div>
+  </div>
+
+
+  <!-- ==================== SCHERMATA DI GIOCO (SCHERMATA 2) ==================== -->
+  <div id="game-view" class="hidden fixed inset-0 bg-white text-slate-900 z-50 flex flex-col justify-between overflow-hidden">
+    
+    <!-- HEADER IN PARTITA -->
+    <div class="bg-white border-b border-slate-200 px-3 py-1.5 sm:px-4 sm:py-2 flex items-center justify-between shadow-sm shrink-0">
+      <!-- Pulsante Esci -->
+      <button onclick="confirmExitMatch()" class="p-1.5 sm:p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-1 font-bold text-xs">
+        <i data-lucide="arrow-left" class="w-5 h-5 sm:w-6 sm:h-6"></i>
+        <span class="hidden sm:inline">Esci</span>
+      </button>
+
+      <!-- RIEPILOGO CENTRALE -->
+      <div class="text-center">
+        <div class="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-widest text-slate-400">SET VINTI</div>
+        <div class="text-xl sm:text-3xl font-black text-slate-900 tracking-wider leading-none">
+          <span id="game-sets-summary">0 - 0</span>
+        </div>
+      </div>
+
+      <!-- TIMER E CAMBIO CAMPO A DESTRA -->
+      <div class="flex items-center gap-1.5 sm:gap-2">
+        <button id="swap-sides-btn" onclick="swapSides()" class="px-2 py-1 sm:px-2.5 sm:py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg border border-slate-200 transition flex items-center gap-1.5" title="Inverti posizione campi">
+          <i data-lucide="repeat" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+          <span class="hidden sm:inline">Cambio campo</span>
+        </button>
+        <div class="flex items-center gap-1 bg-slate-100 px-2 sm:px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700 font-mono text-xs font-bold">
+          <i data-lucide="clock" class="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-600"></i>
+          <span id="match-timer">00:00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- AREA SEGNAPUNTI PRINCIPALE -->
+    <div id="cards-container" class="flex-1 grid grid-cols-2 gap-2 sm:gap-3 p-2 sm:p-3 relative overflow-hidden bg-slate-50">
+      
+      <!-- SQUADRA 1 (Verde) -->
+      <div id="card-t1" onclick="addPoint(1)" class="bg-white border-2 border-slate-200 rounded-2xl sm:rounded-3xl p-2.5 sm:p-3.5 flex flex-col justify-between relative active:scale-[0.99] transition cursor-pointer selection:bg-transparent shadow-sm overflow-hidden">
+        
+        <!-- Intestazione Card -->
+        <div class="w-full flex items-center justify-between gap-1 mb-1">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-emerald-500 shrink-0"></span>
+            <span id="game-t1-name" class="font-black text-xs sm:text-lg md:text-xl text-slate-900 truncate">Squadra 1</span>
+          </div>
+          
+          <!-- INDICATORE BATTUTA -->
+          <div id="t1-serve-badge" class="hidden bg-amber-400 text-slate-950 font-black text-[9px] sm:text-xs px-2 py-0.5 rounded-full shadow flex items-center gap-1 animate-pulse border border-amber-300 shrink-0">
+            <i data-lucide="zap" class="w-3 h-3 fill-current"></i> <span class="landscape-hide-subtext">BATTUTA</span>
+          </div>
+        </div>
+
+        <!-- AREA CENTRALE -->
+        <div class="my-auto py-1 w-full flex items-center justify-between gap-1.5 sm:gap-3">
+          
+          <!-- BOX SET E GAME (SQUADRA 1) -->
+          <div id="t1-boxes" class="flex flex-col gap-1.5 sm:gap-2 shrink-0">
+            <!-- Box Set (SOPRA) -->
+            <div class="bg-emerald-50 border-2 border-emerald-300 rounded-xl px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-center min-w-[60px] sm:min-w-[90px] md:min-w-[110px] shadow-xs">
+              <div class="text-[9px] sm:text-xs font-black uppercase tracking-wider text-emerald-800">SET</div>
+              <div id="t1-sets-count" class="text-3xl sm:text-5xl md:text-6xl font-black text-emerald-950 leading-none mt-0.5">0</div>
+            </div>
+            <!-- Box Game (SOTTO) -->
+            <div class="bg-slate-100 border-2 border-slate-300 rounded-xl px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-center min-w-[60px] sm:min-w-[90px] md:min-w-[110px] shadow-xs">
+              <div class="text-[9px] sm:text-xs font-black uppercase tracking-wider text-slate-600">GAME</div>
+              <div id="t1-games-count" class="text-3xl sm:text-5xl md:text-6xl font-black text-slate-900 leading-none mt-0.5">0</div>
+            </div>
+          </div>
+
+          <!-- BOX PUNTI GAME PRINCIPALE -->
+          <div id="t1-score-box" class="flex-1 flex flex-col items-center justify-center bg-slate-50 border border-slate-200 rounded-2xl py-2 sm:py-3 px-1 min-w-0">
+            <div id="t1-score" class="score-digit text-[6rem] sm:text-[11rem] md:text-[15rem] landscape-score-digit font-black text-emerald-600 tracking-tighter text-center leading-none">0</div>
+            <div id="tiebreak-label-1" class="hidden text-[8px] sm:text-xs font-bold uppercase tracking-widest text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 mt-1">TIEBREAK</div>
+          </div>
+
+        </div>
+
+        <!-- Footer Card -->
+        <div class="w-full flex items-center justify-end pt-1.5 border-t border-slate-100 mt-1">
+          <button onclick="event.stopPropagation(); removePoint(1);" class="px-2 py-1 sm:px-3 sm:py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] sm:text-xs font-bold flex items-center gap-1 border border-slate-200">
+            <i data-lucide="minus" class="w-3 h-3 sm:w-4 sm:h-4"></i> Punto -1
+          </button>
+        </div>
+      </div>
+
+      <!-- SQUADRA 2 (Blu) -->
+      <div id="card-t2" onclick="addPoint(2)" class="bg-white border-2 border-slate-200 rounded-2xl sm:rounded-3xl p-2.5 sm:p-3.5 flex flex-col justify-between relative active:scale-[0.99] transition cursor-pointer selection:bg-transparent shadow-sm overflow-hidden">
+        
+        <!-- Intestazione Card -->
+        <div class="w-full flex items-center justify-between gap-1 mb-1">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-blue-500 shrink-0"></span>
+            <span id="game-t2-name" class="font-black text-xs sm:text-lg md:text-xl text-slate-900 truncate">Squadra 2</span>
+          </div>
+
+          <!-- INDICATORE BATTUTA -->
+          <div id="t2-serve-badge" class="hidden bg-amber-400 text-slate-950 font-black text-[9px] sm:text-xs px-2 py-0.5 rounded-full shadow flex items-center gap-1 animate-pulse border border-amber-300 shrink-0">
+            <i data-lucide="zap" class="w-3 h-3 fill-current"></i> <span class="landscape-hide-subtext">BATTUTA</span>
+          </div>
+        </div>
+
+        <!-- AREA CENTRALE -->
+        <div class="my-auto py-1 w-full flex items-center justify-between gap-1.5 sm:gap-3">
+          
+          <!-- BOX PUNTI GAME PRINCIPALE -->
+          <div id="t2-score-box" class="flex-1 flex flex-col items-center justify-center bg-slate-50 border border-slate-200 rounded-2xl py-2 sm:py-3 px-1 min-w-0">
+            <div id="t2-score" class="score-digit text-[6rem] sm:text-[11rem] md:text-[15rem] landscape-score-digit font-black text-blue-600 tracking-tighter text-center leading-none">0</div>
+            <div id="tiebreak-label-2" class="hidden text-[8px] sm:text-xs font-bold uppercase tracking-widest text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 mt-1">TIEBREAK</div>
+          </div>
+
+          <!-- BOX SET E GAME (SQUADRA 2) -->
+          <div id="t2-boxes" class="flex flex-col gap-1.5 sm:gap-2 shrink-0">
+            <!-- Box Set (SOPRA) -->
+            <div class="bg-blue-50 border-2 border-blue-300 rounded-xl px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-center min-w-[60px] sm:min-w-[90px] md:min-w-[110px] shadow-xs">
+              <div class="text-[9px] sm:text-xs font-black uppercase tracking-wider text-blue-800">SET</div>
+              <div id="t2-sets-count" class="text-3xl sm:text-5xl md:text-6xl font-black text-blue-950 leading-none mt-0.5">0</div>
+            </div>
+            <!-- Box Game (SOTTO) -->
+            <div class="bg-slate-100 border-2 border-slate-300 rounded-xl px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-center min-w-[60px] sm:min-w-[90px] md:min-w-[110px] shadow-xs">
+              <div class="text-[9px] sm:text-xs font-black uppercase tracking-wider text-slate-600">GAME</div>
+              <div id="t2-games-count" class="text-3xl sm:text-5xl md:text-6xl font-black text-slate-900 leading-none mt-0.5">0</div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Footer Card -->
+        <div class="w-full flex items-center justify-end pt-1.5 border-t border-slate-100 mt-1">
+          <button onclick="event.stopPropagation(); removePoint(2);" class="px-2 py-1 sm:px-3 sm:py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] sm:text-xs font-bold flex items-center gap-1 border border-slate-200">
+            <i data-lucide="minus" class="w-3 h-3 sm:w-4 sm:h-4"></i> Punto -1
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TABELLA RIEPILOGO SET E GAME IN BASSO -->
+    <div class="bg-white border-t border-slate-200 p-2 sm:p-3 max-h-36 sm:max-h-44 overflow-y-auto custom-scrollbar shadow-sm shrink-0 landscape-table-container">
+      <div class="max-w-2xl mx-auto space-y-1 sm:space-y-2">
+        <div class="flex items-center justify-between">
+          <div class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+            <i data-lucide="list" class="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-700"></i> Parziali Game / Set
+          </div>
+          <button onclick="undoLastPoint()" class="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-slate-100 hover:bg-slate-200 text-[10px] sm:text-xs text-slate-700 rounded-lg border border-slate-200 font-semibold flex items-center gap-1">
+            <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Annulla punto
+          </button>
+        </div>
+
+        <!-- TABELLA PARZIALI -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-[11px] sm:text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-500">
+                <th class="py-0.5 px-1 font-semibold">Squadra</th>
+                <th id="th-set-1" class="py-0.5 px-1 text-center font-semibold">S1</th>
+                <th id="th-set-2" class="py-0.5 px-1 text-center font-semibold">S2</th>
+                <th id="th-set-3" class="py-0.5 px-1 text-center font-semibold">S3</th>
+                <th id="th-set-4" class="py-0.5 px-1 text-center font-semibold">S4</th>
+                <th id="th-set-5" class="py-0.5 px-1 text-center font-semibold">S5</th>
+                <th class="py-0.5 px-1 text-right font-semibold">Set Tot</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 font-medium">
+              <tr>
+                <td id="table-t1-name" class="py-0.5 px-1 text-emerald-600 font-bold truncate max-w-[80px] sm:max-w-[120px]">Squadra 1</td>
+                <td id="table-t1-s1" class="py-0.5 px-1 text-center text-slate-400">-</td>
+                <td id="table-t1-s2" class="py-0.5 px-1 text-center text-slate-400">-</td>
+                <td id="table-t1-s3" class="py-0.5 px-1 text-center text-slate-400">-</td>
+                <td id="table-t1-s4" class="py-0.5 px-1 text-center text-slate-400">-</td>
+                <td id="table-t1-s5" class="py-0.5 px-1 text-center text-slate-400">-</td>
+                <td id="table-t1-total" class="py-0.5 px-1 text-right font-black text-slate-900">0</td>
+              </tr>
+              <tr>
+                <td id="table-t2-name" class="py-0.5 px-1 text-blue-600 font-bold truncate max-w-[80px] sm:max-w-[120px]">Squadra 2</td>
+                <td id="table-t2-s1" class="py-0.5 px-1 text-center text-slate-400">-</td>
+                <td id="table-t2-s2" class="py-0.5 px-1 text-center text-slate-400">-</td>
+                <td id="table-t2-s3" class="py-0.5 px-1 text-center text-slate-400">-</td>
+                <td id="table-t2-s4" class="py-0.5 px-1 text-center text-slate-400">-</td>
+                <td id="table-t2-s5" class="py-0.5 px-1 text-center text-slate-400">-</td>
+                <td id="table-t2-total" class="py-0.5 px-1 text-right font-black text-slate-900">0</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== MODALE VITTORIA ==================== -->
+  <div id="victory-modal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 max-w-sm w-full text-center shadow-2xl space-y-3 sm:space-y-4 text-slate-900">
+      <div class="inline-flex items-center justify-center p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-600 rounded-2xl">
+        <i data-lucide="trophy" class="w-8 h-8 sm:w-10 sm:h-10"></i>
+      </div>
+      <div>
+        <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500">Vincitori dell'Incontro</h3>
+        <div id="winner-name" class="text-xl sm:text-2xl font-black text-slate-900 mt-1">Squadra 1</div>
+        <p id="winner-score-summary" class="text-xs sm:text-sm text-slate-700 font-semibold mt-0.5">Vittoria per 2 - 1</p>
+      </div>
+
+      <div id="modal-set-summary" class="bg-slate-50 rounded-xl p-2.5 sm:p-3 text-xs space-y-1 border border-slate-200">
+        <!-- Generato via JS -->
+      </div>
+
+      <div class="pt-1">
+        <button onclick="closeVictoryModalAndShowArchive()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 sm:py-3 rounded-xl transition shadow-md text-sm">
+          Salva e Vai all'Archivio
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== LOGICA JAVASCRIPT ==================== -->
+  <script>
+    // --- STATO INSTALLAZIONE PWA ---
+    let deferredPrompt = null;
+
+    let config = {
+      t1Name: 'Squadra A',
+      t2Name: 'Squadra B',
+      setsToWin: 2,
+      deuceEnabled: true,
+      tiebreakEnabled: true,
+      firstServer: 1
+    };
+
+    let match = {
+      t1Pts: 0,       // Punti interni nel game (0, 1, 2, 3...)
+      t2Pts: 0,
+      t1Games: 0,     // Game vinti nel set corrente
+      t2Games: 0,
+      t1Sets: 0,      // Set vinti nella partita
+      t2Sets: 0,
+      currentSetIndex: 1,
+      currentServer: 1, // 1 o 2
+      isTiebreak: false,
+      completedSets: [],
+      history: [],
+      startTime: null,
+      timerInterval: null,
+      elapsedSeconds: 0,
+      isSwapped: false
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      loadArchiveUI();
+      setupPWAInstallBanner();
+    });
+
+    // --- GESTIONE BANNER FLOTTANTE PWA (PER MOBILE E PC) ---
+    function setupPWAInstallBanner() {
+      // Se già aperta come app installata (PWA standalone), nascondi il banner
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+      if (isStandalone) {
+        closeInstallBanner();
+        return;
+      }
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        const banner = document.getElementById('pwa-install-banner');
+        if (banner) banner.classList.remove('hidden');
+      });
+    }
+
+    function triggerInstallPWA() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(() => {
+          deferredPrompt = null;
+          closeInstallBanner();
+        });
+      }
+    }
+
+    function closeInstallBanner() {
+      const banner = document.getElementById('pwa-install-banner');
+      if (banner) banner.classList.add('hidden');
+    }
+
+    // --- TAB CONFIGURAZIONE / ARCHIVIO ---
+    function switchSetupTab(tab) {
+      const btnSetup = document.getElementById('tab-btn-setup');
+      const btnArchive = document.getElementById('tab-btn-archive');
+      const contentSetup = document.getElementById('tab-content-setup');
+      const contentArchive = document.getElementById('tab-content-archive');
+      const startBtn = document.getElementById('start-btn-container');
+
+      if (tab === 'setup') {
+        btnSetup.className = "py-2 px-3 rounded-lg font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 bg-emerald-700 text-white shadow";
+        btnArchive.className = "py-2 px-3 rounded-lg font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 text-slate-600 hover:text-slate-900";
+        contentSetup.classList.remove('hidden');
+        contentArchive.classList.add('hidden');
+        startBtn.classList.remove('hidden');
+      } else {
+        btnArchive.className = "py-2 px-3 rounded-lg font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 bg-emerald-700 text-white shadow";
+        btnSetup.className = "py-2 px-3 rounded-lg font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 text-slate-600 hover:text-slate-900";
+        contentArchive.classList.remove('hidden');
+        contentSetup.classList.add('hidden');
+        startBtn.classList.add('hidden');
+        loadArchiveUI();
+      }
+    }
+
+    // --- AVVIO PARTITA ---
+    function startMatch() {
+      config.t1Name = document.getElementById('t1-name').value.trim() || 'Squadra 1';
+      config.t2Name = document.getElementById('t2-name').value.trim() || 'Squadra 2';
+      config.setsToWin = parseInt(document.getElementById('sets-to-win').value);
+      config.deuceEnabled = document.getElementById('deuce-enabled').checked;
+      config.tiebreakEnabled = document.getElementById('tiebreak-enabled').checked;
+
+      const serverChoice = document.getElementById('first-server').value;
+      if (serverChoice === 'random') {
+        config.firstServer = Math.random() < 0.5 ? 1 : 2;
+      } else {
+        config.firstServer = parseInt(serverChoice);
+      }
+
+      match = {
+        t1Pts: 0,
+        t2Pts: 0,
+        t1Games: 0,
+        t2Games: 0,
+        t1Sets: 0,
+        t2Sets: 0,
+        currentSetIndex: 1,
+        currentServer: config.firstServer,
+        isTiebreak: false,
+        completedSets: [],
+        history: [],
+        startTime: new Date(),
+        elapsedSeconds: 0,
+        timerInterval: null,
+        isSwapped: false
+      };
+
+      document.getElementById('game-t1-name').innerText = config.t1Name;
+      document.getElementById('game-t2-name').innerText = config.t2Name;
+      document.getElementById('table-t1-name').innerText = config.t1Name;
+      document.getElementById('table-t2-name').innerText = config.t2Name;
+
+      for (let i = 1; i <= 5; i++) {
+        const c1 = document.getElementById(`table-t1-s${i}`);
+        const c2 = document.getElementById(`table-t2-s${i}`);
+        if (c1) c1.innerText = '-';
+        if (c2) c2.innerText = '-';
+      }
+
+      updateScoreboardUI();
+      startTimer();
+
+      document.getElementById('setup-view').classList.add('hidden');
+      document.getElementById('game-view').classList.remove('hidden');
+    }
+
+    // --- TIMER ---
+    function startTimer() {
+      if (match.timerInterval) clearInterval(match.timerInterval);
+      match.timerInterval = setInterval(() => {
+        match.elapsedSeconds++;
+        const mins = String(Math.floor(match.elapsedSeconds / 60)).padStart(2, '0');
+        const secs = String(match.elapsedSeconds % 60).padStart(2, '0');
+        document.getElementById('match-timer').innerText = `${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function stopTimer() {
+      if (match.timerInterval) clearInterval(match.timerInterval);
+    }
+
+    // --- BOTTONE CAMBIO CAMPO ---
+    function swapSides() {
+      match.isSwapped = !match.isSwapped;
+      updateScoreboardUI();
+    }
+
+    // --- CONVERSIONE PUNTEGGIO TENNIS (0 - 15 - 30 - 40 - AD) ---
+    function getTennisDisplayScore(p1, p2, isTiebreak) {
+      if (isTiebreak) {
+        return { t1: p1.toString(), t2: p2.toString() };
+      }
+
+      if (p1 >= 3 && p2 >= 3) {
+        if (p1 === p2) return { t1: "40", t2: "40" };
+        if (p1 === p2 + 1) return { t1: "AD", t2: "40" };
+        if (p2 === p1 + 1) return { t1: "40", t2: "AD" };
+      }
+
+      const pointsMap = ["0", "15", "30", "40"];
+      return {
+        t1: pointsMap[Math.min(p1, 3)],
+        t2: pointsMap[Math.min(p2, 3)]
+      };
+    }
+
+    // --- SALVATAGGIO STORICO PER UNDO ---
+    function saveHistoryForUndo() {
+      match.history.push(JSON.parse(JSON.stringify({
+        t1Pts: match.t1Pts,
+        t2Pts: match.t2Pts,
+        t1Games: match.t1Games,
+        t2Games: match.t2Games,
+        t1Sets: match.t1Sets,
+        t2Sets: match.t2Sets,
+        currentSetIndex: match.currentSetIndex,
+        currentServer: match.currentServer,
+        isTiebreak: match.isTiebreak,
+        completedSets: match.completedSets,
+        isSwapped: match.isSwapped
+      })));
+    }
+
+    // --- AGGIUNTA PUNTI ---
+    function addPoint(team) {
+      saveHistoryForUndo();
+
+      if (team === 1) match.t1Pts++;
+      else match.t2Pts++;
+
+      checkGameOrSetWin();
+      updateServer();
+      updateScoreboardUI();
+    }
+
+    function removePoint(team) {
+      if (team === 1 && match.t1Pts > 0) {
+        saveHistoryForUndo();
+        match.t1Pts--;
+      } else if (team === 2 && match.t2Pts > 0) {
+        saveHistoryForUndo();
+        match.t2Pts--;
+      }
+      updateServer();
+      updateScoreboardUI();
+    }
+
+    function undoLastPoint() {
+      if (match.history.length === 0) return;
+      const lastState = match.history.pop();
+      match.t1Pts = lastState.t1Pts;
+      match.t2Pts = lastState.t2Pts;
+      match.t1Games = lastState.t1Games;
+      match.t2Games = lastState.t2Games;
+      match.t1Sets = lastState.t1Sets;
+      match.t2Sets = lastState.t2Sets;
+      match.currentSetIndex = lastState.currentSetIndex;
+      match.currentServer = lastState.currentServer;
+      match.isTiebreak = lastState.isTiebreak;
+      match.completedSets = lastState.completedSets;
+      match.isSwapped = lastState.isSwapped || false;
+
+      updateScoreboardUI();
+    }
+
+    // --- LOGICA VITTORIA GAME E SET ---
+    function checkGameOrSetWin() {
+      const p1 = match.t1Pts;
+      const p2 = match.t2Pts;
+
+      if (match.isTiebreak) {
+        // TIEBREAK (fino a 7 punti con scarto di 2)
+        if ((p1 >= 7 && p1 - p2 >= 2) || (p2 >= 7 && p2 - p1 >= 2)) {
+          const gameWinner = p1 > p2 ? 1 : 2;
+          winGame(gameWinner, true);
+        }
+      } else {
+        // GAME NORMALE
+        if (config.deuceEnabled) {
+          if (p1 >= 4 && p1 - p2 >= 2) winGame(1, false);
+          else if (p2 >= 4 && p2 - p1 >= 2) winGame(2, false);
+        } else {
+          // Killer point sul 40-40 (se Vantaggi disattivati)
+          if (p1 >= 4) winGame(1, false);
+          else if (p2 >= 4) winGame(2, false);
+        }
+      }
+    }
+
+    function winGame(winner, fromTiebreak) {
+      if (winner === 1) match.t1Games++;
+      else match.t2Games++;
+
+      match.t1Pts = 0;
+      match.t2Pts = 0;
+
+      checkSetWin(fromTiebreak);
+    }
+
+    function checkSetWin(wasTiebreak) {
+      const g1 = match.t1Games;
+      const g2 = match.t2Games;
+
+      let setWinner = 0;
+
+      if (wasTiebreak) {
+        setWinner = g1 > g2 ? 1 : 2;
+      } else {
+        if (g1 >= 6 && g1 - g2 >= 2) setWinner = 1;
+        else if (g2 >= 6 && g2 - g1 >= 2) setWinner = 2;
+        else if (g1 === 6 && g2 === 6) {
+          if (config.tiebreakEnabled) {
+            match.isTiebreak = true;
+            return; // Inizia il tiebreak
+          } else {
+            // Se tiebreak disattivato, vince chi fa il 7° game
+            if (g1 === 7) setWinner = 1;
+            else if (g2 === 7) setWinner = 2;
+          }
+        }
+      }
+
+      if (setWinner > 0) {
+        match.completedSets.push({
+          set: match.currentSetIndex,
+          t1Games: g1,
+          t2Games: g2,
+          winner: setWinner,
+          isTiebreak: wasTiebreak
+        });
+
+        if (setWinner === 1) match.t1Sets++;
+        else match.t2Sets++;
+
+        if (match.t1Sets === config.setsToWin || match.t2Sets === config.setsToWin) {
+          finishMatch(setWinner);
+        } else {
+          match.currentSetIndex++;
+          match.t1Games = 0;
+          match.t2Games = 0;
+          match.isTiebreak = false;
+        }
+      }
+    }
+
+    // --- GESTIONE ROTAZIONE BATTUTA ---
+    function updateServer() {
+      let totalGamesPlayed = match.t1Games + match.t2Games;
+      match.completedSets.forEach(s => totalGamesPlayed += (s.t1Games + s.t2Games));
+
+      const initialGameServer = (totalGamesPlayed % 2 === 0) 
+        ? config.firstServer 
+        : (config.firstServer === 1 ? 2 : 1);
+
+      if (match.isTiebreak) {
+        const totalTiebreakPoints = match.t1Pts + match.t2Pts;
+        const changes = Math.floor((totalTiebreakPoints + 1) / 2);
+        match.currentServer = (changes % 2 === 0) 
+          ? initialGameServer 
+          : (initialGameServer === 1 ? 2 : 1);
+      } else {
+        match.currentServer = initialGameServer;
+      }
+    }
+
+    function finishMatch(winner) {
+      stopTimer();
+      saveMatchToArchive(winner);
+
+      const winnerName = winner === 1 ? config.t1Name : config.t2Name;
+      document.getElementById('winner-name').innerText = winnerName;
+      document.getElementById('winner-score-summary').innerText = `Vittoria per ${match.t1Sets} - ${match.t2Sets} Set`;
+
+      let htmlSets = '';
+      match.completedSets.forEach(s => {
+        const tbText = s.isTiebreak ? ' (TB)' : '';
+        htmlSets += `<div class="flex justify-between text-slate-700 font-semibold">
+          <span>Set ${s.set}</span>
+          <span class="font-mono font-bold">${s.t1Games} - ${s.t2Games}${tbText}</span>
+        </div>`;
+      });
+      document.getElementById('modal-set-summary').innerHTML = htmlSets;
+      document.getElementById('victory-modal').classList.remove('hidden');
+    }
+
+    // --- AGGIORNAMENTO UI ---
+    function updateScoreboardUI() {
+      const displayScores = getTennisDisplayScore(match.t1Pts, match.t2Pts, match.isTiebreak);
+
+      document.getElementById('t1-score').innerText = displayScores.t1;
+      document.getElementById('t2-score').innerText = displayScores.t2;
+      document.getElementById('t1-games-count').innerText = match.t1Games;
+      document.getElementById('t2-games-count').innerText = match.t2Games;
+      document.getElementById('t1-sets-count').innerText = match.t1Sets;
+      document.getElementById('t2-sets-count').innerText = match.t2Sets;
+
+      // Header con set invertiti in caso di cambio campo
+      if (match.isSwapped) {
+        document.getElementById('game-sets-summary').innerText = `${match.t2Sets} - ${match.t1Sets}`;
+      } else {
+        document.getElementById('game-sets-summary').innerText = `${match.t1Sets} - ${match.t2Sets}`;
+      }
+
+      // Etichetta Tiebreak
+      const tbLabel1 = document.getElementById('tiebreak-label-1');
+      const tbLabel2 = document.getElementById('tiebreak-label-2');
+      if (match.isTiebreak) {
+        tbLabel1.classList.remove('hidden');
+        tbLabel2.classList.remove('hidden');
+      } else {
+        tbLabel1.classList.add('hidden');
+        tbLabel2.classList.add('hidden');
+      }
+
+      // Inversione schede e layout interno per mantenere SET e GAME sui lati esterni dello schermo
+      const card1 = document.getElementById('card-t1');
+      const card2 = document.getElementById('card-t2');
+      const boxes1 = document.getElementById('t1-boxes');
+      const scoreBox1 = document.getElementById('t1-score-box');
+      const boxes2 = document.getElementById('t2-boxes');
+      const scoreBox2 = document.getElementById('t2-score-box');
+      const swapBtn = document.getElementById('swap-sides-btn');
+
+      if (card1 && card2) {
+        if (match.isSwapped) {
+          card1.style.order = '2';
+          card2.style.order = '1';
+
+          // Scheda a sinistra (Card 2): SET/GAME a sinistra (order 1), PUNTI a destra (order 2)
+          boxes2.style.order = '1';
+          scoreBox2.style.order = '2';
+
+          // Scheda a destra (Card 1): PUNTI a sinistra (order 1), SET/GAME a destra (order 2)
+          scoreBox1.style.order = '1';
+          boxes1.style.order = '2';
+        } else {
+          card1.style.order = '1';
+          card2.style.order = '2';
+
+          // Scheda a sinistra (Card 1): SET/GAME a sinistra (order 1), PUNTI a destra (order 2)
+          boxes1.style.order = '1';
+          scoreBox1.style.order = '2';
+
+          // Scheda a destra (Card 2): PUNTI a sinistra (order 1), SET/GAME a destra (order 2)
+          scoreBox2.style.order = '1';
+          boxes2.style.order = '2';
+        }
+      }
+
+      if (swapBtn) {
+        if (match.isSwapped) {
+          swapBtn.className = "px-2 py-1 sm:px-2.5 sm:py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 shadow-sm";
+        } else {
+          swapBtn.className = "px-2 py-1 sm:px-2.5 sm:py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg border border-slate-200 transition flex items-center gap-1.5";
+        }
+      }
+
+      // Indicatori di Battuta
+      const t1Badge = document.getElementById('t1-serve-badge');
+      const t2Badge = document.getElementById('t2-serve-badge');
+      if (match.currentServer === 1) {
+        t1Badge.classList.remove('hidden');
+        t2Badge.classList.add('hidden');
+      } else {
+        t1Badge.classList.add('hidden');
+        t2Badge.classList.remove('hidden');
+      }
+
+      // Tabella Parziali
+      match.completedSets.forEach(s => {
+        const cell1 = document.getElementById(`table-t1-s${s.set}`);
+        const cell2 = document.getElementById(`table-t2-s${s.set}`);
+        if (cell1 && cell2) {
+          cell1.innerText = s.t1Games;
+          cell2.innerText = s.t2Games;
+          cell1.className = s.winner === 1 ? "py-0.5 px-1 text-center font-bold text-emerald-600" : "py-0.5 px-1 text-center text-slate-400";
+          cell2.className = s.winner === 2 ? "py-0.5 px-1 text-center font-bold text-blue-600" : "py-0.5 px-1 text-center text-slate-400";
+        }
+      });
+
+      const current1 = document.getElementById(`table-t1-s${match.currentSetIndex}`);
+      const current2 = document.getElementById(`table-t2-s${match.currentSetIndex}`);
+      if (current1 && current2 && match.t1Sets < config.setsToWin && match.t2Sets < config.setsToWin) {
+        current1.innerText = match.t1Games;
+        current2.innerText = match.t2Games;
+        current1.className = "py-0.5 px-1 text-center text-slate-900 font-semibold";
+        current2.className = "py-0.5 px-1 text-center text-slate-900 font-semibold";
+      }
+
+      document.getElementById('table-t1-total').innerText = match.t1Sets;
+      document.getElementById('table-t2-total').innerText = match.t2Sets;
+    }
+
+    function confirmExitMatch() {
+      if (confirm("Vuoi davvero abbandonare la partita in corso?")) {
+        stopTimer();
+        document.getElementById('game-view').classList.add('hidden');
+        document.getElementById('setup-view').classList.remove('hidden');
+      }
+    }
+
+    function closeVictoryModalAndShowArchive() {
+      document.getElementById('victory-modal').classList.add('hidden');
+      document.getElementById('game-view').classList.add('hidden');
+      document.getElementById('setup-view').classList.remove('hidden');
+      switchSetupTab('archive');
+    }
+
+    // --- LOCALSTORAGE ARCHIVIO PARTITE ---
+    function getArchive() {
+      try {
+        return JSON.parse(localStorage.getItem('beachtennis_archive') || '[]');
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveArchive(data) {
+      localStorage.setItem('beachtennis_archive', JSON.stringify(data));
+    }
+
+    function saveMatchToArchive(winner) {
+      const archive = getArchive();
+      const matchRecord = {
+        id: Date.now(),
+        date: new Date().toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }),
+        t1Name: config.t1Name,
+        t2Name: config.t2Name,
+        t1Sets: match.t1Sets,
+        t2Sets: match.t2Sets,
+        winner: winner,
+        winnerName: winner === 1 ? config.t1Name : config.t2Name,
+        durationSeconds: match.elapsedSeconds,
+        setsDetail: match.completedSets
+      };
+      archive.unshift(matchRecord);
+      saveArchive(archive);
+    }
+
+    function loadArchiveUI() {
+      const archive = getArchive();
+      document.getElementById('archive-count-badge').innerText = archive.length;
+
+      const container = document.getElementById('archive-list');
+      if (archive.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-6 bg-slate-50 rounded-2xl border border-slate-200 text-slate-400 text-xs">
+            Nessuna partita salvata nell'archivio.
+          </div>`;
+        return;
+      }
+
+      let html = '';
+      archive.forEach(item => {
+        const durationMin = Math.floor(item.durationSeconds / 60);
+        const durationSec = item.durationSeconds % 60;
+        const setString = item.setsDetail.map(s => `${s.t1Games}-${s.t2Games}${s.isTiebreak ? '(TB)' : ''}`).join(' | ');
+
+        html += `
+          <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-1.5">
+            <div class="flex items-center justify-between text-xs text-slate-500">
+              <span>📅 ${item.date}</span>
+              <span>⏱️ ${durationMin}m ${durationSec}s</span>
+            </div>
+            
+            <div class="flex items-center justify-between">
+              <div class="font-bold text-xs sm:text-sm">
+                <span class="${item.winner === 1 ? 'text-emerald-600 font-extrabold' : 'text-slate-800'}">${item.t1Name}</span>
+                <span class="text-slate-400 mx-1">vs</span>
+                <span class="${item.winner === 2 ? 'text-blue-600 font-extrabold' : 'text-slate-800'}">${item.t2Name}</span>
+              </div>
+              <div class="text-sm sm:text-base font-black bg-white px-2 py-0.5 rounded-lg border border-slate-300">
+                ${item.t1Sets} - ${item.t2Sets} Set
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-200">
+              <div class="text-slate-500 text-[11px]">
+                Parziali: <span class="font-mono text-slate-800">${setString}</span>
+              </div>
+              <button onclick="deleteMatch(${item.id})" class="text-rose-500 hover:text-rose-700 p-0.5">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>`;
+      });
+
+      container.innerHTML = html;
+      lucide.createIcons();
+    }
+
+    function deleteMatch(id) {
+      if (confirm("Eliminare questa partita dall'archivio?")) {
+        let archive = getArchive();
+        archive = archive.filter(m => m.id !== id);
+        saveArchive(archive);
+        loadArchiveUI();
+      }
+    }
+
+    function clearArchive() {
+      if (confirm("Sei sicuro di voler cancellare TUTTE le partite dall'archivio?")) {
+        saveArchive([]);
+        loadArchiveUI();
+      }
+    }
+
+    function exportArchiveCSV() {
+      const archive = getArchive();
+      if (archive.length === 0) {
+        alert("L'archivio è vuoto. Nessun dato da esportare.");
+        return;
+      }
+
+      let csvContent = "data:text/csv;charset=utf-8,ID,Data,Squadra 1,Squadra 2,Set S1,Set S2,Vincitore,Durata (sec),Parziali Game\n";
+
+      archive.forEach(m => {
+        const setDetails = m.setsDetail.map(s => `${s.t1Games}-${s.t2Games}`).join(';');
+        csvContent += `"${m.id}","${m.date}","${m.t1Name}","${m.t2Name}",${m.t1Sets},${m.t2Sets},"${m.winnerName}",${m.durationSeconds},"${setDetails}"\n`;
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `beachtennis_erba_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+</body>
+</html>
